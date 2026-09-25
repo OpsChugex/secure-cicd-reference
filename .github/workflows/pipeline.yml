@@ -1,0 +1,72 @@
+name: Secure CI/CD reference pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: secure-cicd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned security tools
+        run: python -m pip install --disable-pip-version-check bandit==1.9.4 pip-audit==2.10.1
+
+      - name: Compile
+        run: python -m compileall -q app.py test_app.py
+
+      - name: Unit test
+        run: python -m unittest -v
+
+      - name: Static security analysis
+        run: bandit -q app.py
+
+      - name: Dependency audit
+        run: pip-audit -r requirements.txt
+
+      - name: Build container image
+        run: docker build -t ocx-cicd-reference:${{ github.sha }} .
+
+      - name: Scan container for critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ocx-cicd-reference:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL
+
+      - name: Smoke test built image
+        run: |
+          cid=$(docker run -d -p 127.0.0.1:18080:8080 ocx-cicd-reference:${GITHUB_SHA})
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          for i in {1..15}; do
+            if curl -fsS http://127.0.0.1:18080/health; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Evidence summary
+        if: always()
+        run: |
+          echo "## OCX-CICD-001" >> "$GITHUB_STEP_SUMMARY"
+          echo "Tests, static analysis, dependency audit, container build, vulnerability scan and smoke verification are executed for this commit." >> "$GITHUB_STEP_SUMMARY"
+          echo "No deployment credentials are used and no environment is deployed." >> "$GITHUB_STEP_SUMMARY"
