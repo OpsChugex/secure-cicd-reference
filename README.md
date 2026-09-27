@@ -37,3 +37,15 @@ A production delivery pipeline would add environment approval, signed or atteste
 A passing run proves that the tested commit passed the gates listed above at that time. It does not prove customer delivery, production availability, SOC 2 compliance or the absence of every possible security issue.
 
 See [pipeline.md](pipeline.md) for the reference sequence.
+
+---
+
+## Related OpsChugex engineering
+
+For context on the engineering area represented in this repository:
+
+- [Managed DevOps](https://opschugex.com/managed-devops)
+- [CI/CD Engineering](https://opschugex.com/service-cicd)
+- [Engineering Proof](https://opschugex.com/engineering-proof)
+
+The repository classification, scope and limitations remain as documented above.
